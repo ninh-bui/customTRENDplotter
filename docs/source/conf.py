@@ -22,7 +22,6 @@ extensions = ['sphinx.ext.napoleon',
               'sphinx.ext.autodoc',
               'sphinx.ext.viewcode',
               'sphinx.ext.autosummary',
-              'myst_parser',
               'sphinx.ext.intersphinx',]
 
 templates_path = ['_templates']
@@ -33,11 +32,6 @@ source_suffix = {
     '.txt': 'markdown',
     '.md': 'markdown',
 }
-myst_enable_extensions = [
-    "colon_fence",
-]
-
-
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
