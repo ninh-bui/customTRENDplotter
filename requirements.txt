@@ -1,2 +1,4 @@
-furo==2024.7.18
-numpy==1.26.4
+furo
+numpy
+pandas
+seaborn
