@@ -376,7 +376,7 @@ class Fluid:
         data = np.array([self.p_pts_out, self.t_pts_out, self.rhovap_pts_out, self.rholiq_pts_out])
 
         # Ninh: added self.x_pts_out
-        return  data, np.array(self.pointID_pts_out),errorflag, np.array(self.x_pts_out)
+        return  data, np.array(self.pointID_pts_out),errorflag
           
     def PTXDIAG(self,pr1,fileout):
         #errorflag = ct.c_int(0)

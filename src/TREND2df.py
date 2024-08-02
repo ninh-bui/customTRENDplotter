@@ -18,10 +18,9 @@ class PTX:
 		self.dll_path = dll_path
 		# Set to 2 if you want to plot wrt to second component.
 		self.comp_to_plot = comp_to_plot
-		self.generate_ptx_df()
 
-	def generate_ptx_df(self) -> pd.DataFrame:
-		""" Clean up data returned from FORTRAN."""
+	def gen_ptx_df(self) -> pd.DataFrame:
+		""" Clean up data returned from FORTRAN and return a dataframe."""
 
 		# PTX_DIAG does not care actual composition values,
 		# for initialization only, does not affect results.
@@ -101,7 +100,7 @@ class PTX:
 		return ptxm_df
 
 	def get_ptx_df(self) -> pd.DataFrame:
-		return self.generate_ptx_df()
+		return self.gen_ptx_df()
 	# return edited dataframe to main script
 
 	def calc_prop_x_df(self, prop: int) -> pd.DataFrame:
@@ -119,7 +118,7 @@ class PTX:
 		if self.input_type in ["tliq", "tvap"]:
 			raise ValueError("Only temperature-density input is supported for property calculation.")
 
-		ptxm_df = self.generate_ptx_df()
+		ptxm_df = self.gen_ptx_df()
 		output = []
 
 		# molanteile affects results!
@@ -155,7 +154,7 @@ class PTX:
 		 object: None. Save plot as png file to directory.
 		"""
 
-		ptxm_df = self.generate_ptx_df()
+		ptxm_df = self.gen_ptx_df()
 
 		if self.comp_to_plot == 1:
 			x_label = r"$x_{%s}$" % self.mixture[0]
@@ -181,7 +180,7 @@ class PTX:
 		# Set x axis limit here if required (uncomment line below).
 		g.set_xlim(0,1)
 		g.set(xlabel=x_label)
-		plt.savefig( "%s_%s.png" % (self.mixture[0], self.mixture[1]))
+		plt.savefig( "ptx_%s_%s.png" % (self.mixture[0], self.mixture[1]))
 
 		if show_plot == True:
 			plt.show()
@@ -233,3 +232,123 @@ class PTX:
 		else:
 			pass
 
+class PT:
+	def __init__(self, env_pv: int, input_type: str, mixture: list, molanteile: list, eos_ind: object,
+	             mixrule: int, path: str, unit: str, dll_path: str, p_spec: object = 0.0, t_spec: object = 0.0, fileout: str = "pt_plot.csv") -> object:
+		""" Class for PT_DIAG
+		Calculates points on phase envelope at constant composition for a given mixture.
+		If pure fluid is set, returns the vapor pressure curve.
+
+		Args:
+			env_pv: 1 for pressure-based, 2 for volume-based during phase envelope calculation.
+			input_type: set to "tliq"/"tvap"/"pliq"/"pvap". PTDIAG does not differentiate between these inputs.
+			mixture: [component1, component2]
+			molanteile: [molfrac1, molfrac2] in the same order as mixture.
+			eos_ind: [eos_ind1, eos_ind2] in the same order as mixture, integer values for EOS type.
+			mixrule: integer value for mixture rule.
+			path: path to TREND's DLL folder
+			unit: "molar" or "specific, but PT_DIAG only returns mol/dm3 for density.
+			dll_path: path to TREND's DLL file.
+			p_spec: specified pressure [MPa] for which a point on the phase envelope is calculated. No pressure is specified by default, which is 0.
+			t_spec: specified temperature [K] for which a point on the phase envelope is calculated. No temperature is specified by default, which is 0.
+			fileout: file name for output csv file. Default is "pt_plot.csv" in script's directory.
+		"""
+
+		self.env_pv = env_pv
+		self.input_type = input_type
+		self.mixture = mixture
+		self.molanteile = molanteile
+		self.eos_ind = eos_ind
+		self.mixrule = mixrule
+		self.path = path
+		self.unit = unit
+		self.dll_path = dll_path
+		self.p_spec = p_spec
+		self.t_spec = t_spec
+		self.fileout = fileout
+
+	def gen_pt_df(self) -> pd.DataFrame:
+		""" Clean up data returned from FORTRAN and return a dataframe.
+
+		Returns:
+			pd.DataFrame: dataframe with PT_DIAG results.
+		"""
+		
+		fluid_pt = Fluid(self.input_type, self.input_type, self.mixture, self.molanteile, self.eos_ind, self.mixrule, self.path, self.unit, self.dll_path)
+
+		ptdiag_res, point_id, ptdiag_error = fluid_pt.PTDIAG(self.env_pv, self.p_spec, self.t_spec, self.fileout)
+
+		# Get rid of all zero values from PT_DIAG returns.
+		idx_of_zero = np.where(ptdiag_res == 0)
+		ptdiag_res = np.delete(ptdiag_res, idx_of_zero, axis=1)
+		point_id = np.delete(point_id, idx_of_zero, axis=0)
+
+		# Create dataframe for PT diagram
+		pt_df = pd.DataFrame({
+			"t_df": ptdiag_res[1],
+			"p_df": ptdiag_res[0],
+			"rhovap_df": ptdiag_res[2],
+			"rholiq_df": ptdiag_res[3],
+			"pt_id_df": point_id
+		})
+		# TODO: is rho_df necessary for PT_DIAG?
+
+		return pt_df
+
+	def get_df(self) -> pd.DataFrame:
+		""" Return dataframe from PT_DIAG."""
+		return self.gen_pt_df()
+		# TODO: this is quite redundant, consider removing.
+
+	def plot_pt(self, show_plot=False) -> None:
+		""" Plot P-T diagram
+
+		Args:
+			show_plot: if True, show plot in window.
+
+		Returns:
+			None. Save plot as png file to directory.
+		"""
+
+		pt_df = self.gen_pt_df()
+
+		sns.set_style("whitegrid")
+		sns.set_palette("bright")
+
+		title = str(self.mixture[0]) + "/" + str(self.mixture[1])
+		g = sns.lineplot(x='t_df', y='p_df', data=pt_df,estimator=None, sort=False)
+		g.set_title("P-T at " + title)
+
+		plt.savefig("pt_plot.png")
+
+		if show_plot == True:
+			plt.show()
+		else:
+			pass
+
+	def multi_plot_pt(self, comp_list, show_plot=False) -> None:
+		""" Plot multiple P-T diagrams on the same graph.
+
+		Args:
+			comp_list: list of compositions to plot.
+
+		Returns:
+			None. Save plot as png file to directory.
+		"""
+		# TODO: Does a separate plotter class make sense?
+
+		sns.set_style("whitegrid")
+		sns.set_palette("bright")
+
+		for comp in comp_list:
+			self.molanteile = [comp, 1-comp]
+			pt_df = self.gen_pt_df()
+			g = sns.lineplot(x='t_df', y='p_df', data=pt_df, estimator=None, sort=False)
+
+		plt.title("P-T Diagram")
+		plt.savefig("multi_pt_plot.png")
+
+		if show_plot == True:
+			plt.show()
+		else:
+			pass
