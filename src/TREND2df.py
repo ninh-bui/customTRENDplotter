@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
+import plotly.graph_objs as go
 from src.customfluid import Fluid
 
 
@@ -19,7 +21,7 @@ class PTX:
 		# Set to 2 if you want to plot wrt to second component.
 		self.comp_to_plot = comp_to_plot
 
-	def gen_ptx_df(self) -> pd.DataFrame:
+	def gen_df(self) -> pd.DataFrame:
 		""" Clean up data returned from FORTRAN and return a dataframe."""
 
 		# PTX_DIAG does not care actual composition values,
@@ -91,6 +93,7 @@ class PTX:
 				"saturated liquid": x_liq
 			})
 
+			# TODO: is the melting necessary here
 			ptxm_df = ptx_df.melt('p_df', var_name='Phase', value_name='Composition')
 
 			rho_df = np.concatenate((rholiq, rhovap))
@@ -99,8 +102,8 @@ class PTX:
 
 		return ptxm_df
 
-	def get_ptx_df(self) -> pd.DataFrame:
-		return self.gen_ptx_df()
+	def get_df(self) -> pd.DataFrame:
+		return self.gen_df()
 	# return edited dataframe to main script
 
 	def calc_prop_x_df(self, prop: int) -> pd.DataFrame:
@@ -118,7 +121,7 @@ class PTX:
 		if self.input_type in ["tliq", "tvap"]:
 			raise ValueError("Only temperature-density input is supported for property calculation.")
 
-		ptxm_df = self.gen_ptx_df()
+		ptxm_df = self.gen_df()
 		output = []
 
 		# molanteile affects results!
@@ -144,7 +147,7 @@ class PTX:
 
 		return ptxm_df
 
-	def plot_ptx(self, show_plot: object = False) -> None:
+	def ptxplot(self, show_plot: object = False) -> None:
 		""" Plot T-x or P-x diagram
 
 		Args:
@@ -187,10 +190,10 @@ class PTX:
 		else:
 			pass
 
-	def plot_ptx_prop(self,df, show_plot=False) -> None:
-		""" Plot ?-x diagram
+	def ptxplot_prop_x(self,df, show_plot=False) -> None:
+		""" Plot ?,x-diagram
 
-		Use after calc_prop_x_df to plot property-x diagram.
+		Use after calc_prop_x_df to plot prop,x-diagram.
 
 		Parameters
 		----------
@@ -267,7 +270,7 @@ class PT:
 		self.t_spec = t_spec
 		self.fileout = fileout
 
-	def gen_pt_df(self) -> pd.DataFrame:
+	def gen_df(self) -> pd.DataFrame:
 		""" Clean up data returned from FORTRAN and return a dataframe.
 
 		Returns:
@@ -291,17 +294,141 @@ class PT:
 			"rholiq_df": ptdiag_res[3],
 			"pt_id_df": point_id
 		})
-		# TODO: is rho_df necessary for PT_DIAG?
+
+		#ptm_df = pt_df.melt(['t_df','p_df','pt_id_df'],value_vars=['rhovap_df','rholiq_df'],var_name='Phase',value_name='rho')
 
 		return pt_df
 
 	def get_df(self) -> pd.DataFrame:
 		""" Return dataframe from PT_DIAG."""
-		return self.gen_pt_df()
+		return self.gen_df()
 		# TODO: this is quite redundant, consider removing.
 
-	def plot_pt(self, show_plot=False) -> None:
-		""" Plot P-T diagram
+	def ptplot(self,show_plot=True) -> None:
+		""" Plot p,T-diagram
+
+		Args:
+			show_plot: if True, show plot in window.
+
+		Returns:
+			None. Save plot as png file to directory.
+		"""
+		# TODO: Add ability to distinguish saturated liquid and vapor lines.
+
+		pt_df = self.gen_df()
+		# Initialize crit_index
+		crit_index = 0
+
+		# Set axis limits for plot. Improving readability.
+		xmin = pt_df['t_df'].min()
+		xmax = pt_df['t_df'].max()
+		ymin = pt_df['p_df'].min()
+		ymax = pt_df['p_df'].max()
+		xmin_adj = xmin - 0.1 * (xmax - xmin)
+		xmax_adj = xmax + 0.1 * (xmax - xmin)
+		ymin_adj = ymin - 0.1 * (ymax - ymin)
+		ymax_adj = ymax + 0.1 * (ymax - ymin)
+
+		# fig = go.Figure(
+		# 	data=[go.Scatter(x=pt_df['t_df'],
+		# 	                 y=pt_df['p_df'],
+		# 	                 mode='lines')],
+
+
+		# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless if crit point is found.
+		if 1 in pt_df['pt_id_df'].values:
+			crit_index = pt_df.loc[pt_df['pt_id_df'] == 1].index[0]
+			fig = go.Figure(
+				layout={'margin':go.layout.Margin(pad=10),
+			    'xaxis':{'range':[xmin_adj,xmax_adj]},
+			    'yaxis':{'range':[ymin_adj,ymax_adj]}
+			    }
+			)
+			# SV line (dashed)
+			fig.add_trace(go.Scatter
+				(
+				x=pt_df['t_df'][:crit_index],
+				y=pt_df['p_df'][:crit_index],
+				mode='lines',
+				name= 'Saturated Vapor',
+				line=dict(color='black', dash='dash',width=3)
+				)
+			)
+			# SL line
+			fig.add_trace(go.Scatter
+				(
+				x=pt_df['t_df'][crit_index:],
+				y=pt_df['p_df'][crit_index:],
+				mode='lines',
+				name= 'Saturated Liquid',
+				line=dict(color='black', width=3)
+			)
+			)
+
+		# Styling
+		fig.update_layout(
+			plot_bgcolor='white',
+		)
+
+		fig.update_xaxes(
+			mirror=True,
+			ticks='outside',
+			showline=True,
+			linecolor='black',
+			gridcolor='lightgrey'
+		)
+		fig.update_yaxes(
+			mirror=True,
+			ticks='outside',
+			showline=True,
+			linecolor='black',
+			gridcolor='lightgrey'
+		)
+
+		# Script behavior.
+		if show_plot == True:
+			fig.show(renderer="browser")
+		else:
+			pass
+
+		fig.write_image("pt_plot.png")
+	
+	def calc_prop_t_df(self, prop: int) -> pd.DataFrame:
+		""" Calculate prop-t on saturation lines and return dataframe.
+
+		The structure for prop-t calculation is different from prop-x calculation. pt_df is not melted like ptx_df -> ptxm_df. propvap_df corresponds to t,rhovap and propliq_df corresponds to t,rholiq.
+
+		Args:
+			prop (int): property code for TREND_CALC. Refer to "Prop list" in TREND manual for property codes. (e.g., 32 is cvr)
+
+		Returns:
+			object: a dataframe with propvap_df and propliq_df columns added
+		"""
+
+		pt_df = self.gen_df()
+		# Initialize empty lists for prop values.
+		propvap = []
+		propliq = []
+
+		for t, d in zip(pt_df["t_df"], pt_df["rhovap_df"]):
+			# Calctype does not matter for TREND_CALC. "cvr" is placeholder.
+			fluid = Fluid("td", "cvr", self.mixture, self.molanteile, self.eos_ind, self.mixrule, self.path, self.unit, self.dll_path)
+			res_tmp = fluid.TREND_CALC(t, d, 0, [prop])
+			propvap.append(res_tmp[0][0])
+
+		for t, d in zip(pt_df["t_df"], pt_df["rholiq_df"]):
+			# Calctype does not matter for TREND_CALC. "cvr" is placeholder.
+			fluid = Fluid("td", "cvr", self.mixture, self.molanteile, self.eos_ind, self.mixrule, self.path, self.unit, self.dll_path)
+			res_tmp = fluid.TREND_CALC(t, d, 0, [prop])
+			propliq.append(res_tmp[0][0])
+
+		pt_df["propvap"] = propvap
+		pt_df["propliq"] = propliq
+
+		return pt_df
+
+	def ptplot_prop_t(self,df,show_plot=False) -> None:
+		""" Plot prop,T-diagram
 
 		Args:
 			show_plot: if True, show plot in window.
@@ -310,24 +437,9 @@ class PT:
 			None. Save plot as png file to directory.
 		"""
 
-		pt_df = self.gen_pt_df()
 
-		sns.set_style("whitegrid")
-		sns.set_palette("bright")
-
-		title = str(self.mixture[0]) + "/" + str(self.mixture[1])
-		g = sns.lineplot(x='t_df', y='p_df', data=pt_df,estimator=None, sort=False)
-		g.set_title("P-T at " + title)
-
-		plt.savefig("pt_plot.png")
-
-		if show_plot == True:
-			plt.show()
-		else:
-			pass
-
-	def multi_plot_pt(self, comp_list, show_plot=False) -> None:
-		""" Plot multiple P-T diagrams on the same graph.
+	def multi_ptplot(self, comp_list, show_plot=False) -> None:
+		""" Plot multiple p,T-diagrams on the same graph.
 
 		Args:
 			comp_list: list of compositions to plot.
@@ -342,7 +454,7 @@ class PT:
 
 		for comp in comp_list:
 			self.molanteile = [comp, 1-comp]
-			pt_df = self.gen_pt_df()
+			pt_df = self.gen_df()
 			g = sns.lineplot(x='t_df', y='p_df', data=pt_df, estimator=None, sort=False)
 
 		plt.title("P-T Diagram")
