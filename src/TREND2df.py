@@ -313,7 +313,6 @@ class PT:
 		Returns:
 			None. Save plot as png file to directory.
 		"""
-		# TODO: Add ability to distinguish saturated liquid and vapor lines.
 
 		pt_df = self.gen_df()
 		# Initialize crit_index
