@@ -3,7 +3,7 @@
 % You can adapt this file completely to your liking, but it should at least
 % contain the root `toctree` directive.
 
-# customTRENDplotter
+# TRENDplotter
 ```{include} ../../README.md
 :relative-images:
 ```
@@ -14,4 +14,6 @@ This library is under heavy development.
 ```{toctree}
 :caption: 'Contents:'
 :maxdepth: 2
+
+usage
 ```

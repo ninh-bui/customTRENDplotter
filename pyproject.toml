@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "TRENDplotter"
+authors =[
+    {name = "Ninh Bui Gia"}
+]
+dynamic = ["version", "description"]
+requires-python = "3.11.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "seaborn",
+    "plotly",
+    "kaleido==0.1.0",
+]
+
+[project.optional-dependencies]
+doc = [
+    "furo",
+    "myst-parser",
+    "sphinx",
+]

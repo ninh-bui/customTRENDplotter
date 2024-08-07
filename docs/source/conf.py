@@ -10,7 +10,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../..'))
 
-project = 'customTRENDplotter'
+project = 'TRENDplotter'
 copyright = '2024, Ninh Bui Gia'
 author = 'Ninh Bui Gia'
 release = '0.0.1'
@@ -23,7 +23,8 @@ extensions = ['sphinx.ext.napoleon',
               'sphinx.ext.viewcode',
               'sphinx.ext.autosummary',
               'sphinx.ext.intersphinx',
-              'myst_parser']
+              'myst_parser',
+              'sphinx.ext.duration']
 
 templates_path = ['_templates']
 exclude_patterns = []
