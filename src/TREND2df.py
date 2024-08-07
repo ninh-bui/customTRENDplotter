@@ -236,7 +236,7 @@ class PTX:
 			pass
 
 class PT:
-	def __init__(self, env_pv: int, input_type: str, mixture: list, molanteile: list, eos_ind: object,
+	def __init__(self, env_pv: int, input_type: str, mixture: list, comp_list: list, eos_ind: object,
 	             mixrule: int, path: str, unit: str, dll_path: str, p_spec: object = 0.0, t_spec: object = 0.0, fileout: str = "pt_plot.csv") -> object:
 		""" Class for PT_DIAG
 		Calculates points on phase envelope at constant composition for a given mixture.
@@ -260,7 +260,7 @@ class PT:
 		self.env_pv = env_pv
 		self.input_type = input_type
 		self.mixture = mixture
-		self.molanteile = molanteile
+		self.comp_list = comp_list
 		self.eos_ind = eos_ind
 		self.mixrule = mixrule
 		self.path = path
@@ -276,93 +276,162 @@ class PT:
 		Returns:
 			pd.DataFrame: dataframe with PT_DIAG results.
 		"""
-		
-		fluid_pt = Fluid(self.input_type, self.input_type, self.mixture, self.molanteile, self.eos_ind, self.mixrule, self.path, self.unit, self.dll_path)
 
-		ptdiag_res, point_id, ptdiag_error = fluid_pt.PTDIAG(self.env_pv, self.p_spec, self.t_spec, self.fileout)
+		if len(self.comp_list) > 1:
+			# Dictionary to hold all composition dataframes.
+			dict_all_comp = {}
 
-		# Get rid of all zero values from PT_DIAG returns.
-		idx_of_zero = np.where(ptdiag_res == 0)
-		ptdiag_res = np.delete(ptdiag_res, idx_of_zero, axis=1)
-		point_id = np.delete(point_id, idx_of_zero, axis=0)
+			for c in self.comp_list:
+				comp1 = c
+				comp2 = 1-c
+				molanteile = [comp1, comp2]
 
-		# Create dataframe for PT diagram
-		pt_df = pd.DataFrame({
-			"t_df": ptdiag_res[1],
-			"p_df": ptdiag_res[0],
-			"rhovap_df": ptdiag_res[2],
-			"rholiq_df": ptdiag_res[3],
-			"pt_id_df": point_id
-		})
+				fluid_pt = Fluid(self.input_type, self.input_type, self.mixture, molanteile, self.eos_ind, self.mixrule,
+				                 self.path, self.unit, self.dll_path)
 
-		#ptm_df = pt_df.melt(['t_df','p_df','pt_id_df'],value_vars=['rhovap_df','rholiq_df'],var_name='Phase',value_name='rho')
+				ptdiag_res, point_id, ptdiag_error = fluid_pt.PTDIAG(self.env_pv, self.p_spec, self.t_spec, self.fileout)
 
-		return pt_df
+				# Get rid of all zero values from PT_DIAG returns.
+				idx_of_zero = np.where(ptdiag_res == 0)
+				ptdiag_res = np.delete(ptdiag_res, idx_of_zero, axis=1)
+				point_id = np.delete(point_id, idx_of_zero, axis=0)
 
-	def get_df(self) -> pd.DataFrame:
-		""" Return dataframe from PT_DIAG."""
-		return self.gen_df()
-		# TODO: this is quite redundant, consider removing.
+				# Create dataframe for PT diagram
+				pt_df = pd.DataFrame({
+					"t_df": ptdiag_res[1],
+					"p_df": ptdiag_res[0],
+					"rhovap_df": ptdiag_res[2],
+					"rholiq_df": ptdiag_res[3],
+					"pt_id_df": point_id
+				})
 
-	def ptplot(self,show_plot=True) -> None:
+				dict_all_comp[str(c)] = pt_df
+			return dict_all_comp
+		else:
+			# In case of single composition:
+			molanteile = [self.comp_list[0], 1 - self.comp_list[0]]
+
+			fluid_pt = Fluid(self.input_type, self.input_type, self.mixture, molanteile, self.eos_ind, self.mixrule,
+			                 self.path, self.unit, self.dll_path)
+
+			ptdiag_res, point_id, ptdiag_error = fluid_pt.PTDIAG(self.env_pv, self.p_spec, self.t_spec, self.fileout)
+
+			# Get rid of all zero values from PT_DIAG returns.
+			idx_of_zero = np.where(ptdiag_res == 0)
+			ptdiag_res = np.delete(ptdiag_res, idx_of_zero, axis=1)
+			point_id = np.delete(point_id, idx_of_zero, axis=0)
+
+			# Create dataframe for PT diagram
+			pt_df = pd.DataFrame({
+				"t_df": ptdiag_res[1],
+				"p_df": ptdiag_res[0],
+				"rhovap_df": ptdiag_res[2],
+				"rholiq_df": ptdiag_res[3],
+				"pt_id_df": point_id
+			})
+
+			return pt_df
+
+	def ptplot(self, data, comp_list, show_plot=True) -> None:
 		""" Plot p,T-diagram
 
 		Args:
+			data: input data for plot. Obtained from gen_df. If multiple compositions are used, data is a dictionary. Otherwise, it is a dataframe.
+			comp_list: list of compositions to plot.
 			show_plot: if True, show plot in window.
 
 		Returns:
 			None. Save plot as png file to directory.
 		"""
 
-		pt_df = self.gen_df()
-		# Initialize crit_index
-		crit_index = 0
+		df = self.gen_df()
 
 		# Set axis limits for plot. Improving readability.
-		xmin = pt_df['t_df'].min()
-		xmax = pt_df['t_df'].max()
-		ymin = pt_df['p_df'].min()
-		ymax = pt_df['p_df'].max()
+		if type(df) == dict:
+			# Find global min and max values for all dataframes.
+			xmin = min([df[str(i)]['t_df'].min() for i in comp_list])
+			xmax = max([df[str(i)]['t_df'].max() for i in comp_list])
+			ymin = min([df[str(i)]['p_df'].min() for i in comp_list])
+			ymax = max([df[str(i)]['p_df'].max() for i in comp_list])
+		elif type(df) == pd.DataFrame:
+			xmin = df['t_df'].min()
+			xmax = df['t_df'].max()
+			ymin = df['p_df'].min()
+			ymax = df['p_df'].max()
+		else:
+			raise ValueError("Data type not supported.")
+
 		xmin_adj = xmin - 0.1 * (xmax - xmin)
 		xmax_adj = xmax + 0.1 * (xmax - xmin)
 		ymin_adj = ymin - 0.1 * (ymax - ymin)
 		ymax_adj = ymax + 0.1 * (ymax - ymin)
 
-		# fig = go.Figure(
-		# 	data=[go.Scatter(x=pt_df['t_df'],
-		# 	                 y=pt_df['p_df'],
-		# 	                 mode='lines')],
-
-
-		# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless if crit point is found.
-		if 1 in pt_df['pt_id_df'].values:
-			crit_index = pt_df.loc[pt_df['pt_id_df'] == 1].index[0]
+		# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless existence of crit point in pt_id.
+		if type(df) == dict:
+			# Initialize figure with adjusted axis limits.
 			fig = go.Figure(
-				layout={'margin':go.layout.Margin(pad=10),
-			    'xaxis':{'range':[xmin_adj,xmax_adj]},
-			    'yaxis':{'range':[ymin_adj,ymax_adj]}
-			    }
+				layout={'margin': go.layout.Margin(pad=0),
+				        'xaxis': {'range': [xmin_adj, xmax_adj]},
+				        'yaxis': {'range': [ymin_adj, ymax_adj]}
+				        }
 			)
-			# SV line (dashed)
-			fig.add_trace(go.Scatter
-				(
-				x=pt_df['t_df'][:crit_index],
-				y=pt_df['p_df'][:crit_index],
-				mode='lines',
-				name= 'Saturated Vapor',
-				line=dict(color='black', dash='dash',width=3)
+			for i in comp_list:
+				# Initialize crit_index
+				crit_index = 0
+				if 1 in df[str(i)]['pt_id_df'].values:
+					crit_index = df[str(i)].loc[df[str(i)]['pt_id_df'] == 1].index[0]
+					# SV line (dashed)
+					fig.add_trace(go.Scatter
+						(
+						x=df[str(i)]['t_df'][:crit_index],
+						y=df[str(i)]['p_df'][:crit_index],
+						mode='lines',
+						name='sat. vapor ' + str(i),
+						line=dict(color='black', dash='dash', width=3)
+						)
+					)
+					# SL line
+					fig.add_trace(go.Scatter
+						(
+						x=df[str(i)]['t_df'][crit_index:],
+						y=df[str(i)]['p_df'][crit_index:],
+						mode='lines',
+						name='sat. liquid ' + str(i),
+						line=dict(color='black', width=3)
+					)
+					)
+					fig.show(renderer="browser")
+
+		elif type(df) == pd.DataFrame:
+			crit_index = 0
+			if 1 in df['pt_id_df'].values:
+				crit_index = df.loc[df['pt_id_df'] == 1].index[0]
+				fig = go.Figure(
+					layout={'margin':go.layout.Margin(pad=0),
+				    'xaxis':{'range':[xmin_adj,xmax_adj]},
+				    'yaxis':{'range':[ymin_adj,ymax_adj]}
+				    }
 				)
-			)
-			# SL line
-			fig.add_trace(go.Scatter
-				(
-				x=pt_df['t_df'][crit_index:],
-				y=pt_df['p_df'][crit_index:],
-				mode='lines',
-				name= 'Saturated Liquid',
-				line=dict(color='black', width=3)
-			)
-			)
+				# SV line (dashed)
+				fig.add_trace(go.Scatter
+					(
+					x=df['t_df'][:crit_index],
+					y=df['p_df'][:crit_index],
+					mode='lines',
+					name= 'sat. vapor',
+					line=dict(color='black', dash='dash',width=3)
+					)
+				)
+				# SL line
+				fig.add_trace(go.Scatter
+					(
+					x=df['t_df'][crit_index:],
+					y=df['p_df'][crit_index:],
+					mode='lines',
+					name= 'sat. liquid',
+					line=dict(color='black', width=3)
+				)
+				)
 
 		# Styling
 		fig.update_layout(
