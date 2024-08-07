@@ -2,4 +2,5 @@ furo
 numpy
 pandas
 seaborn
+myst-parser
 kaleido==0.1.0

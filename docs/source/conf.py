@@ -22,7 +22,8 @@ extensions = ['sphinx.ext.napoleon',
               'sphinx.ext.autodoc',
               'sphinx.ext.viewcode',
               'sphinx.ext.autosummary',
-              'sphinx.ext.intersphinx',]
+              'sphinx.ext.intersphinx',
+              'myst_parser']
 
 templates_path = ['_templates']
 exclude_patterns = []
