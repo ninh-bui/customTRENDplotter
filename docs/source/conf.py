@@ -21,19 +21,15 @@ release = '0.0.1'
 extensions = ['sphinx.ext.napoleon',
               'sphinx.ext.autodoc',
               'sphinx.ext.viewcode',
-              'sphinx.ext.autosummary',
-              'sphinx.ext.intersphinx',
-              'myst_parser',
-              'sphinx.ext.duration']
+              'myst_nb',
+              'sphinx.ext.autosectionlabel',]
+
+#myst_enable_extensions = ['attrs_inline']
+
+#nb_execution_allow_errors = True
 
 templates_path = ['_templates']
 exclude_patterns = []
-
-# source_suffix = {
-#     '.rst': 'restructuredtext',
-#     '.txt': 'markdown',
-#     '.md': 'markdown',
-# }
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

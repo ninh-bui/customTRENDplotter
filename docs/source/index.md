@@ -7,6 +7,7 @@
 ```{include} ../../README.md
 :relative-images:
 ```
+
 ```{warning}
 This library is under heavy development.
 ```
@@ -16,4 +17,5 @@ This library is under heavy development.
 :maxdepth: 2
 
 usage
+notebooks/tutorial
 ```

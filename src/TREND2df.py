@@ -386,7 +386,8 @@ class PT:
 						x=df[str(i)]['t_df'][:crit_index],
 						y=df[str(i)]['p_df'][:crit_index],
 						mode='lines',
-						name='sat. vapor ' + str(i),
+						legendgroup='sat. vapor',
+						showlegend=False,
 						line=dict(color='black', dash='dash', width=3)
 						)
 					)
@@ -396,11 +397,12 @@ class PT:
 						x=df[str(i)]['t_df'][crit_index:],
 						y=df[str(i)]['p_df'][crit_index:],
 						mode='lines',
-						name='sat. liquid ' + str(i),
+						name= str(i),
+						legendgroup='sat. liquid',
+						showlegend=False,
 						line=dict(color='black', width=3)
 					)
 					)
-					fig.show(renderer="browser")
 
 		elif type(df) == pd.DataFrame:
 			crit_index = 0
@@ -418,7 +420,8 @@ class PT:
 					x=df['t_df'][:crit_index],
 					y=df['p_df'][:crit_index],
 					mode='lines',
-					name= 'sat. vapor',
+					name='sat. vapor',
+					showlegend=False,
 					line=dict(color='black', dash='dash',width=3)
 					)
 				)
@@ -428,12 +431,63 @@ class PT:
 					x=df['t_df'][crit_index:],
 					y=df['p_df'][crit_index:],
 					mode='lines',
-					name= 'sat. liquid',
+					name='sat. liquid',
+					showlegend=False,
 					line=dict(color='black', width=3)
 				)
 				)
 
-		# Styling
+		# Line annotation for composition.
+		if type(df) == dict:
+			for i in comp_list:
+				fig.add_annotation(
+					x=df[str(i)]['t_df'][:crit_index].median(),
+					y=df[str(i)]['p_df'][:crit_index].median(),
+					text=str(i),
+					font=dict(
+						size=18,
+						color='black',
+						family='Arial'
+					),
+					bgcolor='white',
+					showarrow=False,
+				)
+		elif type(df) == pd.DataFrame:
+			fig.add_annotation(
+				x=df['t_df'][:crit_index].median(),
+				y=df['p_df'][:crit_index].median(),
+				text=str(self.comp_list[0]),
+				font=dict(
+					size=18,
+					color='black',
+					family='Arial'
+				),
+				bgcolor='white',
+				showarrow=False,
+			)
+
+		# Legend control for SL and SV lines.
+		fig.add_trace(go.Scatter
+			(
+			x=[0],
+			y=[0],
+			mode='lines',
+			name='sat. vapor',
+			line=dict(color='black', dash='dash', width=3)
+		))
+		fig.add_trace(go.Scatter
+			(
+			x=[0],
+			y=[0],
+			mode='lines',
+			name='sat. liquid',
+			line=dict(color='black', width=3)
+		))
+
+		# Set axis labels.
+		fig.update_xaxes(title_text='$Temperature~/~K$')
+
+		# Background plot color
 		fig.update_layout(
 			plot_bgcolor='white',
 		)

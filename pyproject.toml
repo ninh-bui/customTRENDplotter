@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 doc = [
     "furo",
-    "myst-parser",
-    "sphinx",
+    "myst_nb",
+    "sphinx==4.0.2",
+    "mistune",
 ]
