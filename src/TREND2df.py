@@ -357,7 +357,26 @@ class PT:
 			None. Save plot as png file to directory.
 		"""
 
+		# To get some space between the data and the plot border.
+		custom_pad = 0.15
 
+		# Convert string to prop_list code for TREND_CALC.
+		str_to_propcode = {
+			'p': 3,
+			'u': 4,
+			'h': 5,
+			's': 6,
+			'g': 7,
+			'a': 8,
+			'cp': 9,
+			'cv': 10,
+			'ws': 11,
+			'cvr': 32,
+			'pip':35,
+		}
+
+		# Plotting stuff starts here onward.
+		# Regular p,T plot.
 		if prop == None:
 			# TODO: should the user put in their own data? Or should it be self-gen like this?
 			df = self.gen_df()
@@ -371,7 +390,6 @@ class PT:
 				ymin = df[str(i)]['p_df'].min()
 				ymax = df[str(i)]['p_df'].max()
 
-			custom_pad = 0.15
 			xmin_adj = xmin - custom_pad * (xmax - xmin)
 			xmax_adj = xmax + custom_pad * (xmax - xmin)
 			ymin_adj = ymin - custom_pad * (ymax - ymin)
@@ -387,8 +405,6 @@ class PT:
 
 			# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless existence of crit point in pt_id.
 			for i in comp_list:
-				# Initialize crit_index
-				crit_index = 0
 				if 1 in df[str(i)]['pt_id_df'].values:
 					crit_index = df[str(i)].loc[df[str(i)]['pt_id_df'] == 1].index[0]
 					# SV line (dashed)
@@ -399,7 +415,7 @@ class PT:
 						mode='lines',
 						legendgroup='sat. vapor',
 						showlegend=False,
-						line=dict(color='black', dash='dash', width=3)
+						line=dict(color='black', dash='dash', width=2)
 						)
 					)
 					# SL line
@@ -411,7 +427,20 @@ class PT:
 						name= str(i),
 						legendgroup='sat. liquid',
 						showlegend=False,
-						line=dict(color='black', width=3)
+						line=dict(color='black', width=2)
+					)
+					)
+				else:
+					print("No critical point found for composition %s." % str(i))
+					# No distinction between sat. liquid and sat. vapor.
+					fig.add_trace(go.Scatter
+						(
+						x=df[str(i)]['t_df'][:crit_index],
+						y=df[str(i)]['p_df'][:crit_index],
+						name=str(i),
+						mode='lines',
+						showlegend=False,
+						line=dict(width=2, dash='dot')
 					)
 					)
 
@@ -426,10 +455,10 @@ class PT:
 				ymin = df[str(i)]['prop_df'].min()
 				ymax = df[str(i)]['prop_df'].max()
 
-			xmin_adj = xmin - 0.1 * (xmax - xmin)
-			xmax_adj = xmax + 0.1 * (xmax - xmin)
-			ymin_adj = ymin - 0.1 * (ymax - ymin)
-			ymax_adj = ymax + 0.1 * (ymax - ymin)
+			xmin_adj = xmin - custom_pad * (xmax - xmin)
+			xmax_adj = xmax + custom_pad * (xmax - xmin)
+			ymin_adj = ymin - custom_pad * (ymax - ymin)
+			ymax_adj = ymax + custom_pad * (ymax - ymin)
 
 			# Initialize figure with adjusted axis limits.
 			fig = go.Figure(
@@ -441,8 +470,6 @@ class PT:
 
 			# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless existence of crit point in pt_id.
 			for i in comp_list:
-				# Initialize crit_index
-				crit_index = 0
 				if 1 in df[str(i)]['pt_id_df'].values:
 					crit_index = df[str(i)].loc[df[str(i)]['pt_id_df'] == 1].index[0]
 					# SV line (dashed)
@@ -453,7 +480,7 @@ class PT:
 						mode='lines',
 						legendgroup='sat. vapor',
 						showlegend=False,
-						line=dict(color='black', dash='dash', width=3)
+						line=dict(color='black', dash='dash', width=2)
 					)
 					)
 					# SL line
@@ -465,10 +492,22 @@ class PT:
 						name=str(i),
 						legendgroup='sat. liquid',
 						showlegend=False,
-						line=dict(color='black', width=3)
+						line=dict(color='black', width=2)
 					)
 					)
-
+				else:
+					print("No critical point found for composition %s." % str(i))
+					# No distinction between sat. liquid and sat. vapor.
+					fig.add_trace(go.Scatter
+						(
+						x=df[str(i)]['t_df'][:crit_index],
+						y=df[str(i)]['prop_df'][:crit_index],
+						mode='lines',
+						name=str(i),
+						showlegend=False,
+						line=dict(width=2, dash='dot')
+					)
+					)
 
 		# Line annotation for composition.
 		if show_annotation == True:
@@ -493,7 +532,7 @@ class PT:
 			y=[0],
 			mode='lines',
 			name='sat. vapor',
-			line=dict(color='black', dash='dash', width=3)
+			line=dict(color='black', dash='dash', width=2)
 		))
 		fig.add_trace(go.Scatter
 			(
@@ -501,7 +540,7 @@ class PT:
 			y=[0],
 			mode='lines',
 			name='sat. liquid',
-			line=dict(color='black', width=3)
+			line=dict(color='black', width=2)
 		))
 
 		# Background plot color/plot size
@@ -515,8 +554,10 @@ class PT:
 		fig.update_xaxes(
 			mirror=True,
 			ticks='inside',
+			tickwidth=2,
 			showline=True,
 			linecolor='black',
+			linewidth=2,
 			gridcolor='lightgrey',
 			title_text=r'$\text{Temperature}~/~K$',
 			title_font_size=18,
@@ -527,6 +568,7 @@ class PT:
 			ticks='inside',
 			showline=True,
 			linecolor='black',
+			linewidth=2,
 			gridcolor='lightgrey',
 			title_text= r'$\text{Pressure}~/~MPa$',
 			title_font_size=18,
@@ -540,15 +582,3 @@ class PT:
 			pass
 
 		fig.write_image("pt_plot.png")
-	
-
-
-	def ptplot_prop_t(self,df,show_plot=False) -> None:
-		""" Plot prop,T-diagram
-
-		Args:
-			show_plot: if True, show plot in window.
-
-		Returns:
-			None. Save plot as png file to directory.
-		"""
