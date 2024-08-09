@@ -270,46 +270,52 @@ class PT:
 		self.t_spec = t_spec
 		self.fileout = fileout
 
-	def gen_df(self) -> pd.DataFrame:
+	def gen_df(self, prop: int = None) -> pd.DataFrame:
 		""" Clean up data returned from FORTRAN and return a dataframe.
+
+		Args:
+			prop (int): property code for TREND_CALC. Refer to "Prop list" in TREND manual for property codes, e.g., 32 is CVR. Default is None, meaning no property calculation is done.
 
 		Returns:
 			pd.DataFrame: dataframe with PT_DIAG results.
 		"""
 
-		if len(self.comp_list) > 1:
-			# Dictionary to hold all composition dataframes.
-			dict_all_comp = {}
+		def calc_prop_t_df(self):
+			""" Calculate prop-t on saturation lines from PT_DIAG results.
 
-			for c in self.comp_list:
-				comp1 = c
-				comp2 = 1-c
-				molanteile = [comp1, comp2]
+			Attach prop values to dataframe, if prop argument is not `None` in ptplot.
 
-				fluid_pt = Fluid(self.input_type, self.input_type, self.mixture, molanteile, self.eos_ind, self.mixrule,
-				                 self.path, self.unit, self.dll_path)
+			The structure for prop-t calculation is different from prop-x calculation. pt_df is not melted like ptx_df -> ptxm_df. propvap_df corresponds to t,rhovap and propliq_df corresponds to t,rholiq.
 
-				ptdiag_res, point_id, ptdiag_error = fluid_pt.PTDIAG(self.env_pv, self.p_spec, self.t_spec, self.fileout)
+			Args:
+				prop (int): property code for TREND_CALC. Refer to "Prop list" in TREND manual for property codes. (e.g., 32 is cvr)
 
-				# Get rid of all zero values from PT_DIAG returns.
-				idx_of_zero = np.where(ptdiag_res == 0)
-				ptdiag_res = np.delete(ptdiag_res, idx_of_zero, axis=1)
-				point_id = np.delete(point_id, idx_of_zero, axis=0)
+			Returns:
+				prop (list): list of prop values for each point on the saturation lines. This is to be attached to the dataframe.
+			"""
+			# Initialize empty lists for prop values.
+			prop_res = []
 
-				# Create dataframe for PT diagram
-				pt_df = pd.DataFrame({
-					"t_df": ptdiag_res[1],
-					"p_df": ptdiag_res[0],
-					"rhovap_df": ptdiag_res[2],
-					"rholiq_df": ptdiag_res[3],
-					"pt_id_df": point_id
-				})
+			# Prop is calculated from t, rhovap, since rhovap is the original phase.
+			# Unsure what rholiq is,
+			# maybe it is density of the opposite phase in equilibrium.
 
-				dict_all_comp[str(c)] = pt_df
-			return dict_all_comp
-		else:
-			# In case of single composition:
-			molanteile = [self.comp_list[0], 1 - self.comp_list[0]]
+			for t, d in zip(pt_df["t_df"], pt_df["rhovap_df"]):
+				# Calctype does not matter for TREND_CALC. "cvr" is placeholder. What matters is the prop list. 'molanteile' should be taken from gen_df.
+				fluid = Fluid("td", "cvr", self.mixture, molanteile, self.eos_ind, self.mixrule, self.path, self.unit,
+				              self.dll_path)
+				res_tmp = fluid.TREND_CALC(t, d, 0, [prop])
+				prop_res.append(res_tmp[0][0])
+
+			return prop_res
+
+		# Dictionary to hold all composition dataframes.
+		dict_all_comp = {}
+
+		for c in self.comp_list:
+			comp1 = c
+			comp2 = 1-c
+			molanteile = [comp1, comp2]
 
 			fluid_pt = Fluid(self.input_type, self.input_type, self.mixture, molanteile, self.eos_ind, self.mixrule,
 			                 self.path, self.unit, self.dll_path)
@@ -330,51 +336,56 @@ class PT:
 				"pt_id_df": point_id
 			})
 
-			return pt_df
+			# Calculate properties for each composition.
+			if prop is not None:
+				prop_res = calc_prop_t_df(self)
+				pt_df["prop_df"] = prop_res
 
-	def ptplot(self, data, comp_list, show_plot=True) -> None:
-		""" Plot p,T-diagram
+			dict_all_comp[str(c)] = pt_df
+		return dict_all_comp
+
+	def ptplot(self, comp_list, prop=None, show_annotation=False, show_plot=True) -> None:
+		""" Plot p,T-diagram and prop,T-diagram
 
 		Args:
-			data: input data for plot. Obtained from gen_df. If multiple compositions are used, data is a dictionary. Otherwise, it is a dataframe.
 			comp_list: list of compositions to plot.
+			prop: property code for TREND_CALC. Refer to "Prop list" in TREND manual for property codes. Default is None, meaning no property calculation is done.
+			show_annotation: if True, show composition annotation on plot.
 			show_plot: if True, show plot in window.
 
 		Returns:
 			None. Save plot as png file to directory.
 		"""
 
-		df = self.gen_df()
 
-		# Set axis limits for plot. Improving readability.
-		if type(df) == dict:
+		if prop == None:
+			# TODO: should the user put in their own data? Or should it be self-gen like this?
+			df = self.gen_df()
+
+
+			# Set axis limits for plot. Improving readability.
 			# Find global min and max values for all dataframes.
-			xmin = min([df[str(i)]['t_df'].min() for i in comp_list])
-			xmax = max([df[str(i)]['t_df'].max() for i in comp_list])
-			ymin = min([df[str(i)]['p_df'].min() for i in comp_list])
-			ymax = max([df[str(i)]['p_df'].max() for i in comp_list])
-		elif type(df) == pd.DataFrame:
-			xmin = df['t_df'].min()
-			xmax = df['t_df'].max()
-			ymin = df['p_df'].min()
-			ymax = df['p_df'].max()
-		else:
-			raise ValueError("Data type not supported.")
+			for i in comp_list:
+				xmin = df[str(i)]['t_df'].min()
+				xmax = df[str(i)]['t_df'].max()
+				ymin = df[str(i)]['p_df'].min()
+				ymax = df[str(i)]['p_df'].max()
 
-		xmin_adj = xmin - 0.1 * (xmax - xmin)
-		xmax_adj = xmax + 0.1 * (xmax - xmin)
-		ymin_adj = ymin - 0.1 * (ymax - ymin)
-		ymax_adj = ymax + 0.1 * (ymax - ymin)
+			custom_pad = 0.15
+			xmin_adj = xmin - custom_pad * (xmax - xmin)
+			xmax_adj = xmax + custom_pad * (xmax - xmin)
+			ymin_adj = ymin - custom_pad * (ymax - ymin)
+			ymax_adj = ymax + custom_pad * (ymax - ymin)
 
-		# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless existence of crit point in pt_id.
-		if type(df) == dict:
 			# Initialize figure with adjusted axis limits.
 			fig = go.Figure(
 				layout={'margin': go.layout.Margin(pad=0),
 				        'xaxis': {'range': [xmin_adj, xmax_adj]},
 				        'yaxis': {'range': [ymin_adj, ymax_adj]}
-				        }
+				        },
 			)
+
+			# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless existence of crit point in pt_id.
 			for i in comp_list:
 				# Initialize crit_index
 				crit_index = 0
@@ -404,41 +415,63 @@ class PT:
 					)
 					)
 
-		elif type(df) == pd.DataFrame:
-			crit_index = 0
-			if 1 in df['pt_id_df'].values:
-				crit_index = df.loc[df['pt_id_df'] == 1].index[0]
-				fig = go.Figure(
-					layout={'margin':go.layout.Margin(pad=0),
-				    'xaxis':{'range':[xmin_adj,xmax_adj]},
-				    'yaxis':{'range':[ymin_adj,ymax_adj]}
-				    }
-				)
-				# SV line (dashed)
-				fig.add_trace(go.Scatter
-					(
-					x=df['t_df'][:crit_index],
-					y=df['p_df'][:crit_index],
-					mode='lines',
-					name='sat. vapor',
-					showlegend=False,
-					line=dict(color='black', dash='dash',width=3)
+		else:
+			df = self.gen_df(prop)
+
+			# Set axis limits for plot. Improving readability.
+			# Find global min and max values for all dataframes.
+			for i in comp_list:
+				xmin = df[str(i)]['t_df'].min()
+				xmax = df[str(i)]['t_df'].max()
+				ymin = df[str(i)]['prop_df'].min()
+				ymax = df[str(i)]['prop_df'].max()
+
+			xmin_adj = xmin - 0.1 * (xmax - xmin)
+			xmax_adj = xmax + 0.1 * (xmax - xmin)
+			ymin_adj = ymin - 0.1 * (ymax - ymin)
+			ymax_adj = ymax + 0.1 * (ymax - ymin)
+
+			# Initialize figure with adjusted axis limits.
+			fig = go.Figure(
+				layout={'margin': go.layout.Margin(pad=0),
+				        'xaxis': {'range': [xmin_adj, xmax_adj]},
+				        'yaxis': {'range': [ymin_adj, ymax_adj]}
+				        },
+			)
+
+			# Look for index of crit point in dataframe. Also acts as a bug-check and fail-check for point_id. Make sure plot is produced regardless existence of crit point in pt_id.
+			for i in comp_list:
+				# Initialize crit_index
+				crit_index = 0
+				if 1 in df[str(i)]['pt_id_df'].values:
+					crit_index = df[str(i)].loc[df[str(i)]['pt_id_df'] == 1].index[0]
+					# SV line (dashed)
+					fig.add_trace(go.Scatter
+						(
+						x=df[str(i)]['t_df'][:crit_index],
+						y=df[str(i)]['prop_df'][:crit_index],
+						mode='lines',
+						legendgroup='sat. vapor',
+						showlegend=False,
+						line=dict(color='black', dash='dash', width=3)
 					)
-				)
-				# SL line
-				fig.add_trace(go.Scatter
-					(
-					x=df['t_df'][crit_index:],
-					y=df['p_df'][crit_index:],
-					mode='lines',
-					name='sat. liquid',
-					showlegend=False,
-					line=dict(color='black', width=3)
-				)
-				)
+					)
+					# SL line
+					fig.add_trace(go.Scatter
+						(
+						x=df[str(i)]['t_df'][crit_index:],
+						y=df[str(i)]['prop_df'][crit_index:],
+						mode='lines',
+						name=str(i),
+						legendgroup='sat. liquid',
+						showlegend=False,
+						line=dict(color='black', width=3)
+					)
+					)
+
 
 		# Line annotation for composition.
-		if type(df) == dict:
+		if show_annotation == True:
 			for i in comp_list:
 				fig.add_annotation(
 					x=df[str(i)]['t_df'][:crit_index].median(),
@@ -452,21 +485,8 @@ class PT:
 					bgcolor='white',
 					showarrow=False,
 				)
-		elif type(df) == pd.DataFrame:
-			fig.add_annotation(
-				x=df['t_df'][:crit_index].median(),
-				y=df['p_df'][:crit_index].median(),
-				text=str(self.comp_list[0]),
-				font=dict(
-					size=18,
-					color='black',
-					family='Arial'
-				),
-				bgcolor='white',
-				showarrow=False,
-			)
 
-		# Legend control for SL and SV lines.
+		# Legend control for SL and SV lines. Manual way, does not connect to the data. Otherwise, legend is shown for each composition, which is too crowded.
 		fig.add_trace(go.Scatter
 			(
 			x=[0],
@@ -484,27 +504,33 @@ class PT:
 			line=dict(color='black', width=3)
 		))
 
-		# Set axis labels.
-		fig.update_xaxes(title_text='$Temperature~/~K$')
-
-		# Background plot color
+		# Background plot color/plot size
 		fig.update_layout(
 			plot_bgcolor='white',
+			width=800,
+			height=500,
 		)
 
+		# Axis labels and grid settings.
 		fig.update_xaxes(
 			mirror=True,
-			ticks='outside',
+			ticks='inside',
 			showline=True,
 			linecolor='black',
-			gridcolor='lightgrey'
+			gridcolor='lightgrey',
+			title_text=r'$\text{Temperature}~/~K$',
+			title_font_size=18,
+			tickfont=dict(family='Arial', size=18),
 		)
 		fig.update_yaxes(
 			mirror=True,
-			ticks='outside',
+			ticks='inside',
 			showline=True,
 			linecolor='black',
-			gridcolor='lightgrey'
+			gridcolor='lightgrey',
+			title_text= r'$\text{Pressure}~/~MPa$',
+			title_font_size=18,
+			tickfont=dict(family='Arial', size=18),
 		)
 
 		# Script behavior.
@@ -515,39 +541,7 @@ class PT:
 
 		fig.write_image("pt_plot.png")
 	
-	def calc_prop_t_df(self, prop: int) -> pd.DataFrame:
-		""" Calculate prop-t on saturation lines and return dataframe.
 
-		The structure for prop-t calculation is different from prop-x calculation. pt_df is not melted like ptx_df -> ptxm_df. propvap_df corresponds to t,rhovap and propliq_df corresponds to t,rholiq.
-
-		Args:
-			prop (int): property code for TREND_CALC. Refer to "Prop list" in TREND manual for property codes. (e.g., 32 is cvr)
-
-		Returns:
-			object: a dataframe with propvap_df and propliq_df columns added
-		"""
-
-		pt_df = self.gen_df()
-		# Initialize empty lists for prop values.
-		propvap = []
-		propliq = []
-
-		for t, d in zip(pt_df["t_df"], pt_df["rhovap_df"]):
-			# Calctype does not matter for TREND_CALC. "cvr" is placeholder.
-			fluid = Fluid("td", "cvr", self.mixture, self.molanteile, self.eos_ind, self.mixrule, self.path, self.unit, self.dll_path)
-			res_tmp = fluid.TREND_CALC(t, d, 0, [prop])
-			propvap.append(res_tmp[0][0])
-
-		for t, d in zip(pt_df["t_df"], pt_df["rholiq_df"]):
-			# Calctype does not matter for TREND_CALC. "cvr" is placeholder.
-			fluid = Fluid("td", "cvr", self.mixture, self.molanteile, self.eos_ind, self.mixrule, self.path, self.unit, self.dll_path)
-			res_tmp = fluid.TREND_CALC(t, d, 0, [prop])
-			propliq.append(res_tmp[0][0])
-
-		pt_df["propvap"] = propvap
-		pt_df["propliq"] = propliq
-
-		return pt_df
 
 	def ptplot_prop_t(self,df,show_plot=False) -> None:
 		""" Plot prop,T-diagram
@@ -558,31 +552,3 @@ class PT:
 		Returns:
 			None. Save plot as png file to directory.
 		"""
-
-
-	def multi_ptplot(self, comp_list, show_plot=False) -> None:
-		""" Plot multiple p,T-diagrams on the same graph.
-
-		Args:
-			comp_list: list of compositions to plot.
-
-		Returns:
-			None. Save plot as png file to directory.
-		"""
-		# TODO: Does a separate plotter class make sense?
-
-		sns.set_style("whitegrid")
-		sns.set_palette("bright")
-
-		for comp in comp_list:
-			self.molanteile = [comp, 1-comp]
-			pt_df = self.gen_df()
-			g = sns.lineplot(x='t_df', y='p_df', data=pt_df, estimator=None, sort=False)
-
-		plt.title("P-T Diagram")
-		plt.savefig("multi_pt_plot.png")
-
-		if show_plot == True:
-			plt.show()
-		else:
-			pass
